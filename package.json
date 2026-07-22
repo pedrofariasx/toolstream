@@ -1,0 +1,55 @@
+{
+  "name": "toolstream",
+  "version": "0.1.0",
+  "description": "Incremental streaming parser for LLM tool calls — framework-agnostic, event-driven, multi-provider",
+  "keywords": [
+    "llm", "tool-calls", "function-calling", "streaming",
+    "parser", "openai", "anthropic", "gemini", "deepseek",
+    "incremental", "json-stream", "partial-json"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toolstream/toolstream"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.mjs",
+      "require": "./dist/adapters/index.cjs"
+    },
+    "./internal/*": {
+      "types": "./dist/internal/*.d.ts",
+      "import": "./dist/internal/*.mjs",
+      "require": "./dist/internal/*.cjs"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
