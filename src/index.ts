@@ -47,4 +47,5 @@ export {
   QwenAdapter,
   XmlAdapter,
   MarkdownAdapter,
+  FunctionTagAdapter,
 } from './adapters/index.js'
