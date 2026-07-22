@@ -1,6 +1,6 @@
 {
   "name": "@pedrofariasx/toolstream",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Incremental streaming parser for LLM tool calls — framework-agnostic, event-driven, multi-provider",
   "keywords": [
     "llm",
