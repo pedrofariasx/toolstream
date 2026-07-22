@@ -12,6 +12,7 @@ interface XmlToolState {
 	paramValue: string
 	textBuffer: string
 	paramDepth: number
+	paramFormatAttr: boolean
 }
 
 export class XmlAdapter extends BaseAdapter {
@@ -27,6 +28,7 @@ export class XmlAdapter extends BaseAdapter {
 		paramValue: "",
 		textBuffer: "",
 		paramDepth: 0,
+		paramFormatAttr: false,
 	}
 	private inToolCall: boolean = false
 	private inTag: boolean = false
@@ -48,7 +50,14 @@ export class XmlAdapter extends BaseAdapter {
 				if (this.state.inParameters && this.state.currentTag) {
 					if (this.state.paramDepth === 0) {
 						const closeTag = `</${this.state.currentTag}>`
-						if (chunk.substring(i).startsWith(closeTag)) {
+						const remaining = chunk.substring(i)
+						if (remaining.startsWith(closeTag)) {
+							this.flushText()
+							this.inTag = true
+							this.tagName = ""
+							continue
+						}
+						if (this.state.paramFormatAttr && remaining.startsWith("</parameter>")) {
 							this.flushText()
 							this.inTag = true
 							this.tagName = ""
@@ -81,10 +90,28 @@ export class XmlAdapter extends BaseAdapter {
 			}
 
 			if (this.inToolCall && !this.inTag) {
+				this.state.textBuffer += char
 				if (char === ">" && this.state.paramDepth > 0) {
 					this.state.paramDepth--
+					if (this.state.paramDepth === 0 && this.state.currentTag) {
+						const tb = this.state.textBuffer
+						const closeTag = `</${this.state.currentTag}>`
+						const altCloseTag = this.state.paramFormatAttr ? "</parameter>" : null
+						if (tb.length >= closeTag.length && tb.endsWith(closeTag)) {
+							const value = tb.slice(0, -closeTag.length)
+							this.state.textBuffer = value
+							this.flushText()
+							this.state.currentTag = undefined
+						} else if (altCloseTag && tb.length >= altCloseTag.length && tb.endsWith(altCloseTag)) {
+							const value = tb.slice(0, -altCloseTag.length)
+							this.state.textBuffer = value
+							this.flushText()
+							this.state.currentTag = undefined
+							this.state.inParameters = false
+							this.state.paramFormatAttr = false
+						}
+					}
 				}
-				this.state.textBuffer += char
 			}
 		}
 	}
@@ -167,6 +194,7 @@ export class XmlAdapter extends BaseAdapter {
 					paramValue: "",
 					textBuffer: "",
 					paramDepth: 0,
+					paramFormatAttr: false,
 				}
 				return results.length > 0 ? results : null
 			}
@@ -196,6 +224,18 @@ export class XmlAdapter extends BaseAdapter {
 			return null
 		}
 
+		if (!isClosing && tagName.startsWith("parameter=")) {
+			const key = tagName.slice("parameter=".length).trim()
+			if (key) {
+				this.state.paramKey = key
+				this.state.paramValue = ""
+				this.state.currentTag = "parameter"
+				this.state.inParameters = true
+				this.state.paramFormatAttr = true
+				return null
+			}
+		}
+
 		if (this.state.inParameters && !isClosing) {
 			this.state.paramKey = tagName
 			this.state.paramValue = ""
@@ -205,6 +245,10 @@ export class XmlAdapter extends BaseAdapter {
 
 		if (this.state.inParameters && isClosing) {
 			this.state.currentTag = undefined
+			if (this.state.paramFormatAttr && tagName === "parameter") {
+				this.state.inParameters = false
+				this.state.paramFormatAttr = false
+			}
 			return null
 		}
 
@@ -228,6 +272,7 @@ export class XmlAdapter extends BaseAdapter {
 			paramValue: "",
 			textBuffer: "",
 			paramDepth: 0,
+			paramFormatAttr: false,
 		}
 		this.inToolCall = false
 		this.inTag = false
