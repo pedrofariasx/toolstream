@@ -1,6 +1,8 @@
 import type { NormalizedDelta, ProviderName } from "../types.js"
 import { BaseAdapter } from "./base.js"
 
+const MAX_ADAPTER_BUFFER = 512 * 1024
+
 export class MarkdownAdapter extends BaseAdapter {
 	readonly name: ProviderName = "markdown"
 	private buffer: string = ""
@@ -16,6 +18,9 @@ export class MarkdownAdapter extends BaseAdapter {
 
 	private *parseChunk(chunk: string): Generator<NormalizedDelta> {
 		this.buffer += chunk
+		if (this.buffer.length > MAX_ADAPTER_BUFFER) {
+			this.buffer = this.buffer.slice(-Math.floor(MAX_ADAPTER_BUFFER / 2))
+		}
 		const lines = this.buffer.split("\n")
 
 		if (!this.buffer.endsWith("\n")) {

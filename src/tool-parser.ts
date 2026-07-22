@@ -43,6 +43,8 @@ export class ToolStream extends ToolStreamEmitter {
 			provider: "openai",
 			earlyExecutionThreshold: 0.85,
 			maxBufferSize: 1024 * 1024,
+			maxPendingCalls: 50,
+			maxArgumentSize: 1024 * 1024,
 			environment: "node",
 			...options,
 		} as Required<ToolStreamOptions>
@@ -165,6 +167,10 @@ export class ToolStream extends ToolStreamEmitter {
 			case "toolDetected": {
 				const index = delta.index ?? 0
 				if (!this.pendingCalls.has(index)) {
+					if (this.pendingCalls.size >= this.options.maxPendingCalls) {
+						const oldest = this.pendingCalls.keys().next().value
+						if (oldest !== undefined) this.completeToolCall(oldest)
+					}
 					const call: PendingToolCall = {
 						id: undefined,
 						provider: this.provider,
@@ -231,7 +237,9 @@ export class ToolStream extends ToolStreamEmitter {
 				const index = delta.index ?? 0
 				const call = this.pendingCalls.get(index)
 				if (call && delta.arguments) {
-					call.arguments += delta.arguments
+					if (call.arguments.length < this.options.maxArgumentSize) {
+						call.arguments += delta.arguments
+					}
 					this.emitSync("toolUpdated", call)
 					this.processArgumentsDelta(call, delta.arguments)
 				}
@@ -258,7 +266,8 @@ export class ToolStream extends ToolStreamEmitter {
 			}
 
 			call.confidence = this.confidenceScorer.evaluate(call).score
-		} catch {
+		} catch (err) {
+			this.emitSync("error", new ToolStreamError(`json parse error: ${err}`, "JSON_PARSE"))
 			if (call.arguments.length > 10) {
 				try {
 					const repaired = JsonRepairer.repair(call.arguments)
@@ -441,6 +450,7 @@ export class ToolStream extends ToolStreamEmitter {
 	}
 
 	reset(): void {
+		this.activeAdapter?.reset()
 		this.activeAdapter = null
 		this.tokenizer = new Tokenizer()
 		this.stateMachine.reset()

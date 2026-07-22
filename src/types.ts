@@ -51,6 +51,8 @@ export interface ToolStreamOptions {
 	customAdapter?: ProviderAdapter
 	earlyExecutionThreshold?: number
 	maxBufferSize?: number
+	maxPendingCalls?: number
+	maxArgumentSize?: number
 	environment?: ToolStreamEnvironment
 }
 

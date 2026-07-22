@@ -3,6 +3,7 @@ import { BaseAdapter } from "./base.js"
 
 export class GeminiAdapter extends BaseAdapter {
 	readonly name: ProviderName = "gemini"
+	private nextIndex: number = 0
 
 	processChunk(chunk: string): Generator<NormalizedDelta> {
 		return this.parseChunk(chunk)
@@ -36,7 +37,7 @@ export class GeminiAdapter extends BaseAdapter {
 					const fc = part?.functionCall
 					if (!fc) continue
 
-					const index = 0
+					const index = this.nextIndex++
 					yield this.createToolDetected(index)
 					if (fc.name) yield this.createToolName(fc.name, index)
 					if (fc.args) {
@@ -51,5 +52,6 @@ export class GeminiAdapter extends BaseAdapter {
 
 	reset(): void {
 		super.reset()
+		this.nextIndex = 0
 	}
 }

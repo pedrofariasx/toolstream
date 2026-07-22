@@ -10,6 +10,41 @@ interface PendingCall {
 	nameComplete: boolean
 }
 
+const MAX_ADAPTER_BUFFER = 512 * 1024
+
+function escapeJson(s: string): string {
+	let r = ""
+	for (let i = 0; i < s.length; i++) {
+		const c = s[i]
+		switch (c) {
+			case '"':
+				r += '\\"'
+				break
+			case "\\":
+				r += "\\\\"
+				break
+			case "\n":
+				r += "\\n"
+				break
+			case "\r":
+				r += "\\r"
+				break
+			case "\t":
+				r += "\\t"
+				break
+			case "\b":
+				r += "\\b"
+				break
+			case "\f":
+				r += "\\f"
+				break
+			default:
+				r += c < " " ? `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}` : c
+		}
+	}
+	return r
+}
+
 export class FunctionTagAdapter extends BaseAdapter {
 	readonly name: ProviderName = "custom"
 	private pending: PendingCall[] = []
@@ -37,6 +72,9 @@ export class FunctionTagAdapter extends BaseAdapter {
 
 	private *parseChunk(chunk: string): Generator<NormalizedDelta> {
 		this.buffer += chunk
+		if (this.buffer.length > MAX_ADAPTER_BUFFER) {
+			this.buffer = this.buffer.slice(-Math.floor(MAX_ADAPTER_BUFFER / 2))
+		}
 
 		for (let i = 0; i < chunk.length; i++) {
 			const char = chunk[i]
@@ -91,7 +129,9 @@ export class FunctionTagAdapter extends BaseAdapter {
 			try {
 				parsed = JSON.parse(jsonStr)
 			} catch {
-				break
+				this.calledProcessedUpTo = endBracket + 1
+				idx = this.buffer.indexOf("[Called ", this.calledProcessedUpTo)
+				continue
 			}
 
 			const args = JSON.stringify(parsed)
@@ -152,7 +192,7 @@ export class FunctionTagAdapter extends BaseAdapter {
 
 	private flushParameter(): void {
 		if (this.current?.currentParamKey) {
-			this.current.argsBuffer += `"${this.current.currentParamKey}":"${this.current.currentParamValue.replace(/"/g, '\\"')}",`
+			this.current.argsBuffer += `"${this.current.currentParamKey}":"${escapeJson(this.current.currentParamValue)}",`
 			this.current.currentParamKey = undefined
 			this.current.currentParamValue = ""
 		}
