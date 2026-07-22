@@ -126,7 +126,7 @@ export interface ToolStreamEventMap {
 
 export type ToolStreamListener<E extends EventKind> = (
   ...args: ToolStreamEventMap[E]
-) => void | Promise<void>
+) => void | Promise<void> | unknown
 
 export class ToolStreamError extends Error {
   constructor(
