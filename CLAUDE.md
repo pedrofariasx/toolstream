@@ -1,20 +1,24 @@
 # CLAUDE.md
 
-# ToolStream
+# ToolStream — Streaming Parsing Engine
 
 ## Project Vision
 
-ToolStream is an open-source library specialized in **incremental Tool Call parsing for Large Language Models**.
+ToolStream is the **first streaming parsing engine for incremental Tool Call processing**, compatible with OpenAI, Anthropic, Gemini, DeepSeek, Qwen, XML, Markdown and any text-based protocol.
 
 Its purpose is to become the standard parsing engine for AI applications, similarly to how **llhttp** became the standard HTTP parser and **tree-sitter** became the standard incremental parser for programming languages.
 
-This project is **NOT** an AI framework.
+This is **NOT** an AI framework, **NOT** an Agent Framework, **NOT** an LLM SDK.
 
-It is **NOT** an Agent Framework.
+This is a low-level infrastructure engine focused exclusively on parsing, reconstructing, validating, repairing and normalizing Tool Calls emitted by LLMs in streaming.
 
-It is **NOT** an LLM SDK.
+The engine architecture supports future extensions such as:
+- Structured response parsing (`response_format`)
+- Reasoning event traces
+- MCP protocol calls
+- Agent-to-agent protocols
 
-It is a low-level infrastructure library focused exclusively on parsing, reconstructing, validating, repairing and normalizing Tool Calls emitted by LLMs.
+The core engine remains the same; only new adapters and normalizers are added.
 
 ---
 
@@ -506,6 +510,58 @@ Avoid:
 - giant classes
 - hidden side effects
 - magic constants
+
+---
+
+# Performance Budget
+
+Every implementation must respect these constraints:
+
+- **No regex in hot paths**: Tokenizer and state machine must use character-level operations
+- **O(n) complexity**: Processing time must scale linearly with input size
+- **Deterministic**: Same input always produces same output, same events, same order
+- **Maximum allocations per chunk**: Reuse buffers whenever possible; avoid per-character allocation
+- **Zero-copy preferred**: Reference input data instead of copying when safe
+- **Streaming only**: The engine must never require the complete input to begin processing
+- **No recursive parsing**: Use iterative state machines, not recursive descent
+
+Performance regressions should fail CI. Every optimization must be benchmarked.
+
+---
+
+# Compatibility Matrix
+
+Every PR that adds or modifies a provider must update this table.
+
+| Provider | Status | Streaming | Non-Streaming | Auto-Detect |
+|----------|--------|-----------|---------------|-------------|
+| OpenAI | ✅ Stable | ✅ | ✅ | ✅ |
+| Anthropic | ✅ Stable | ✅ | ❌ | ✅ |
+| Gemini | ✅ Stable | ❌ | ✅ | ✅ |
+| DeepSeek | ✅ Stable | ✅ | ✅ | ✅ |
+| Qwen | ✅ Stable | ✅ | ✅ | ✅ |
+| XML | ✅ Stable | ✅ | ✅ | ✅ |
+| Markdown | 🟡 Beta | ✅ | ✅ | ✅ |
+| Mistral | 📋 Planned | | | |
+| xAI | 📋 Planned | | | |
+| OpenAI Compatible | 📋 Planned | | | |
+
+**Legend**: ✅ Stable, 🟡 Beta, 📋 Planned, ❌ Not applicable
+
+---
+
+# Parser Guarantees
+
+The parser guarantees:
+
+- **Incremental parsing**: Chunks may arrive one byte at a time; the engine always produces correct partial state
+- **Deterministic behavior**: Identical input sequences always produce identical event sequences and output
+- **Provider independence**: Core engine never depends on any provider format; all formats are adapters
+- **Stable event ordering**: Events are emitted in a predictable, documented order
+- **Recoverable malformed streams**: Partial JSON, truncated chunks, and unexpected EOF are tolerated without data loss
+- **Non-blocking execution**: All operations are synchronous; no microtasks, promises, or I/O
+- **Streaming compatibility**: Works in Node.js, Bun, Deno, Browsers, and Cloudflare Workers
+- **No hidden state mutations**: Buffer and state are exposed via snapshot() for inspection
 
 ---
 

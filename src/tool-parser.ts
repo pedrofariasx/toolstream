@@ -1,5 +1,6 @@
 import { ToolStreamEmitter } from './event-emitter.js'
 import { ToolCallStateMachine } from './state-machine.js'
+import { Tokenizer } from './tokenizer.js'
 import { JsonStreamParser, JsonRepairer } from './json-stream.js'
 import { ConfidenceScorer } from './confidence.js'
 import { RecoveryEngine } from './recovery.js'
@@ -9,21 +10,23 @@ import type {
   ProviderName,
   PendingToolCall,
   CompletedToolCall,
+  NormalizedToolCall,
   ToolStreamOptions,
   ToolStreamSnapshot,
-  NormalizedToolCall,
   ProviderAdapter,
   NormalizedDelta,
 } from './types.js'
 import {
   ToolStreamError,
   StateMachineState,
+  TokenType,
 } from './types.js'
 
 export class ToolStream extends ToolStreamEmitter {
   private options: Required<ToolStreamOptions>
   private activeAdapter: ProviderAdapter | null = null
   private customAdapter: ProviderAdapter | null = null
+  private tokenizer: Tokenizer = new Tokenizer()
   private stateMachine: ToolCallStateMachine = new ToolCallStateMachine()
   private jsonParser: JsonStreamParser = new JsonStreamParser()
   private confidenceScorer: ConfidenceScorer
@@ -31,6 +34,7 @@ export class ToolStream extends ToolStreamEmitter {
   private normalizer: Normalizer = new Normalizer()
   private pendingCalls: Map<number, PendingToolCall> = new Map()
   private completedCalls: CompletedToolCall[] = []
+  private normalizedCalls: NormalizedToolCall[] = []
   private buffer: string = ''
   private chunkCount: number = 0
   private provider: ProviderName | null = null
@@ -82,12 +86,25 @@ export class ToolStream extends ToolStreamEmitter {
       this.trimBuffer()
     }
 
-    this.processChunk(chunk)
+    // Pipeline: Tokenizer → Adapter/StateMachine → Parser → Recovery → Repair → Normalizer → Events
+    this.runTokenizer(chunk)
 
     return this
   }
 
-  private processChunk(chunk: string): void {
+  private runTokenizer(chunk: string): void {
+    this.tokenizer.feed(chunk)
+
+    let token = this.tokenizer.next()
+    while (token.type !== TokenType.EOF) {
+      this.emitSync('token', token.type, token.value)
+      token = this.tokenizer.next()
+    }
+
+    this.runAdapter(chunk)
+  }
+
+  private runAdapter(chunk: string): void {
     if (this.options.autoDetectProvider && !this.activeAdapter) {
       const detected = adapterRegistry.detect(chunk)
       if (detected) {
@@ -191,6 +208,7 @@ export class ToolStream extends ToolStreamEmitter {
           call.name = delta.name
           this.jsonParser.reset()
           this.emitSync('toolStarted', call.id ?? '', delta.name, index)
+          this.emitSync('toolUpdated', call)
         }
         break
       }
@@ -199,6 +217,7 @@ export class ToolStream extends ToolStreamEmitter {
         const call = this.pendingCalls.get(index)
         if (call && delta.arguments) {
           call.arguments += delta.arguments
+          this.emitSync('toolUpdated', call)
           this.processArgumentsDelta(call, delta.arguments)
         }
         break
@@ -253,6 +272,7 @@ export class ToolStream extends ToolStreamEmitter {
       this.emitSync('argumentsUpdated', delta, partial, call.index)
 
       call.confidence = this.confidenceScorer.evaluate(call).score
+      this.emitSync('toolUpdated', call)
     } catch {
       // partial JSON in streaming is expected
     }
@@ -291,6 +311,12 @@ export class ToolStream extends ToolStreamEmitter {
     }
 
     this.completedCalls.push(completed)
+
+    // Normalizer pipeline: normaliza antes de emitir toolCompleted
+    const normalized = this.normalizer.normalizeCompleted(completed)
+    this.normalizedCalls.push(normalized)
+    this.emitSync('normalized', normalized)
+
     this.pendingCalls.delete(index)
     this.emitSync('toolCompleted', completed)
   }
@@ -323,6 +349,9 @@ export class ToolStream extends ToolStreamEmitter {
       if (result.recovered) {
         for (const tc of result.toolCalls) {
           this.completedCalls.push(tc)
+          const normalized = this.normalizer.normalizeCompleted(tc)
+          this.normalizedCalls.push(normalized)
+          this.emitSync('normalized', normalized)
           this.emitSync('toolCompleted', tc)
         }
       }
@@ -348,7 +377,7 @@ export class ToolStream extends ToolStreamEmitter {
   }
 
   getNormalizedCalls(): NormalizedToolCall[] {
-    return this.normalizer.normalizeBatch(this.completedCalls)
+    return [...this.normalizedCalls]
   }
 
   getProvider(): ProviderName | null {
@@ -396,11 +425,13 @@ export class ToolStream extends ToolStreamEmitter {
 
   reset(): void {
     this.activeAdapter = null
+    this.tokenizer = new Tokenizer()
     this.stateMachine.reset()
     this.jsonParser.reset()
     this.recoveryEngine.reset()
     this.pendingCalls.clear()
     this.completedCalls = []
+    this.normalizedCalls = []
     this.buffer = ''
     this.chunkCount = 0
     this.provider = null

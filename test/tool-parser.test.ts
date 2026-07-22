@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ToolStream } from '../src/tool-parser.js'
-import type { CompletedToolCall, EarlyExecutableToolCall } from '../src/types.js'
+import type { CompletedToolCall, EarlyExecutableToolCall, NormalizedToolCall } from '../src/types.js'
 import {
   openaiChunks,
   anthropicChunks,
@@ -308,5 +308,65 @@ describe('ToolStream', () => {
 
     const completed = parser.finalize()
     expect(completed[0].provider).toBe('anthropic')
+  })
+
+  it('should emit token events during parsing', () => {
+    const parser = new ToolStream({ provider: 'openai', autoDetectProvider: false })
+    const tokens: string[] = []
+
+    parser.on('token', (type) => tokens.push(type))
+
+    parser.push(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_t1","function":{"name":"fn","arguments":""}}]}}]}`)
+    parser.finalize()
+
+    expect(tokens.length).toBeGreaterThan(0)
+    expect(tokens).toContain('OBJECT_START')
+    expect(tokens).toContain('STRING')
+    expect(tokens).toContain('COLON')
+  })
+
+  it('should emit toolUpdated events during argument streaming', () => {
+    const parser = new ToolStream({ provider: 'openai', autoDetectProvider: false })
+    const updates: number[] = []
+
+    parser.on('toolUpdated', () => updates.push(1))
+
+    for (const chunk of openaiChunks.singleStreaming) {
+      parser.push(chunk)
+    }
+    parser.finalize()
+
+    expect(updates.length).toBeGreaterThan(0)
+  })
+
+  it('should emit normalized event on tool completion', () => {
+    const parser = new ToolStream({ provider: 'openai', autoDetectProvider: false })
+    const normalized: NormalizedToolCall[] = []
+
+    parser.on('normalized', (tc) => normalized.push(tc))
+
+    for (const chunk of openaiChunks.singleStreaming) {
+      parser.push(chunk)
+    }
+    parser.finalize()
+
+    expect(normalized).toHaveLength(1)
+    expect(normalized[0].name).toBe('search_docs')
+    expect(normalized[0].completed).toBe(true)
+    expect(normalized[0].provider).toBe('openai')
+  })
+
+  it('should normalize via pipeline automatically', () => {
+    const parser = new ToolStream({ provider: 'openai', autoDetectProvider: false })
+
+    for (const chunk of openaiChunks.singleStreaming) {
+      parser.push(chunk)
+    }
+    parser.finalize()
+
+    const normalized = parser.getNormalizedCalls()
+    expect(normalized).toHaveLength(1)
+    expect(normalized[0].id).toBe('call_abc')
+    expect(normalized[0].provider).toBe('openai')
   })
 })

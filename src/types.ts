@@ -93,24 +93,30 @@ export interface ProviderAdapter {
 
 export type EventKind =
   | 'text'
+  | 'token'
   | 'toolDetected'
   | 'toolStarted'
+  | 'toolUpdated'
   | 'argumentsUpdated'
   | 'jsonUpdated'
-  | 'toolCompleted'
   | 'repair'
+  | 'normalized'
+  | 'toolCompleted'
   | 'error'
   | 'stateChanged'
   | 'drain'
 
 export interface ToolStreamEventMap {
   'text': [text: string]
+  'token': [type: string, value: string]
   'toolDetected': [PendingToolCall]
   'toolStarted': [id: string, name: string, index: number]
+  'toolUpdated': [toolCall: PendingToolCall]
   'argumentsUpdated': [delta: string, partial: Record<string, unknown>, index: number]
   'jsonUpdated': [parsed: Record<string, unknown>, index: number]
-  'toolCompleted': [toolCall: CompletedToolCall]
   'repair': [original: string, repaired: string, index: number | undefined]
+  'normalized': [toolCall: NormalizedToolCall]
+  'toolCompleted': [toolCall: CompletedToolCall]
   'error': [error: ToolStreamError]
   'stateChanged': [state: string]
   'drain': []
