@@ -1,10 +1,10 @@
-# CLAUDE.md
-
 # ToolStream — Streaming Parsing Engine
 
 ## Project Vision
 
-ToolStream is the **first streaming parsing engine for incremental Tool Call processing**, compatible with OpenAI, Anthropic, Gemini, DeepSeek, Qwen, XML, Markdown and any text-based protocol.
+ToolStream is a **provider-agnostic streaming parsing engine for incremental Tool Call processing**, compatible with OpenAI, Anthropic, Gemini, DeepSeek, Qwen, XML, Markdown and any text-based protocol.
+
+Unlike provider-specific implementations embedded inside inference servers or SDKs, ToolStream is designed as a standalone infrastructure library that can be embedded into any runtime or framework.
 
 Its purpose is to become the standard parsing engine for AI applications, similarly to how **llhttp** became the standard HTTP parser and **tree-sitter** became the standard incremental parser for programming languages.
 
@@ -19,6 +19,21 @@ The engine architecture supports future extensions such as:
 - Agent-to-agent protocols
 
 The core engine remains the same; only new adapters and normalizers are added.
+
+---
+
+# Design Principles
+
+The architecture is inspired by mature infrastructure software such as:
+
+- **llhttp** — deterministic state machine for HTTP parsing
+- **tree-sitter** — incremental parsing with concrete syntax trees
+- **simdjson** — high-performance, validated JSON parsing
+- **Compiler frontends** — tokenization → parsing → semantic analysis pipeline
+
+The engine should **favor deterministic state machines over heuristic parsing**.
+
+Provider-specific logic must **never leak into the core parser**.
 
 ---
 
@@ -123,6 +138,90 @@ Never mix responsibilities.
 
 ---
 
+# Architecture Layers
+
+```
+Core                 Adapters              Applications
+────                 ───────              ────────────
+Tokenizer            OpenAI                SDKs
+State Machine        Anthropic             IDEs
+Parser               Gemini                Proxies
+Recovery             DeepSeek              Agent Frameworks
+Repair               Qwen
+Normalizer           XML
+                     Markdown
+                     Custom
+```
+
+Each layer must remain independent.
+
+---
+
+# Parser Lifecycle
+
+```
+Input
+
+↓
+
+Tokenizer
+
+↓
+
+Semantic Tokens
+
+↓
+
+State Machine
+
+↓
+
+Parser
+
+↓
+
+Recovery
+
+↓
+
+Repair
+
+↓
+
+Normalizer
+
+↓
+
+Events
+
+↓
+
+Consumer
+```
+
+Each layer must remain independent. Responsibilities never cross layers.
+
+---
+
+# Supported Input
+
+The engine accepts:
+
+- **Streaming text** — chunks arriving one at a time via `push(chunk)`
+- **Complete text** — entire response at once
+- **OpenAI streaming deltas** — SSE `data:` events with `tool_calls`
+- **Anthropic streaming events** — `content_block_start/delta/stop` with `input_json_delta`
+- **Gemini** — non-streaming `functionCall` parts
+- **DeepSeek / Qwen** — OpenAI-compatible deltas
+- **XML** — `<tool_call>` blocks with `<tool_name>` and `<parameters>`
+- **Markdown** — fenced code blocks with tool definitions
+- **JSON** — raw JSON tool call structures
+- **Custom protocols** — via the adapter interface
+
+Adapters convert these formats into semantic parser events.
+
+---
+
 # Project Goals
 
 The parser must be capable of:
@@ -137,7 +236,7 @@ The parser must be capable of:
 
 ---
 
-# Non Goals
+# Non Goals / Out of Scope
 
 The project should NOT:
 
@@ -148,6 +247,18 @@ The project should NOT:
 - Store chat history
 - Perform prompt engineering
 - Handle business logic
+
+The following features intentionally belong outside ToolStream:
+
+- HTTP clients
+- API authentication
+- Conversation memory
+- Prompt engineering
+- Tool execution
+- Agent planning
+- Retry logic
+- Model routing
+- Context management
 
 Only parsing belongs here.
 
@@ -262,6 +373,8 @@ Expected events:
 ```
 text
 
+token
+
 toolDetected
 
 toolStarted
@@ -272,6 +385,8 @@ argumentsUpdated
 
 jsonUpdated
 
+normalized
+
 toolCompleted
 
 repair
@@ -279,6 +394,8 @@ repair
 error
 
 stateChanged
+
+snapshot
 ```
 
 Events should be lightweight.
@@ -431,6 +548,87 @@ The parser should support custom adapters.
 
 ---
 
+# Performance Budget
+
+## Constraints
+
+Every implementation must respect these constraints:
+
+- **No regex in hot paths**: Tokenizer and state machine must use character-level operations
+- **O(n) complexity**: Processing time must scale linearly with input size
+- **Deterministic**: Same input always produces same output, same events, same order
+- **Maximum allocations per chunk**: Reuse buffers whenever possible; avoid per-character allocation
+- **Zero-copy preferred**: Reference input data instead of copying when safe
+- **Streaming only**: The engine must never require the complete input to begin processing
+- **No recursive parsing**: Use iterative state machines, not recursive descent
+
+## Targets
+
+- **Throughput**: >100 MB/s on Node.js
+- **Latency**: <1ms for typical Tool Calls
+- **Memory**: Constant memory growth during streaming; no quadratic behavior is acceptable
+
+Performance regressions should fail CI. Every optimization must be benchmarked.
+
+---
+
+# Compatibility Goals
+
+The parser should support any protocol capable of expressing structured Tool Calls.
+
+Examples include:
+
+- OpenAI
+- Anthropic
+- Gemini
+- DeepSeek
+- Qwen
+- Mistral
+- xAI
+- OpenAI Compatible
+- XML
+- Markdown
+- MCP
+- Future protocols
+
+Adding support for a new protocol should require implementing only an adapter.
+
+## Compatibility Matrix
+
+Every PR that adds or modifies a provider must update this table.
+
+| Provider | Status | Streaming | Non-Streaming | Auto-Detect |
+|----------|--------|-----------|---------------|-------------|
+| OpenAI | ✅ Stable | ✅ | ✅ | ✅ |
+| Anthropic | ✅ Stable | ✅ | ❌ | ✅ |
+| Gemini | ✅ Stable | ❌ | ✅ | ✅ |
+| DeepSeek | ✅ Stable | ✅ | ✅ | ✅ |
+| Qwen | ✅ Stable | ✅ | ✅ | ✅ |
+| XML | ✅ Stable | ✅ | ✅ | ✅ |
+| Markdown | 🟡 Beta | ✅ | ✅ | ✅ |
+| Mistral | 📋 Planned | | | |
+| xAI | 📋 Planned | | | |
+| OpenAI Compatible | 📋 Planned | | | |
+
+**Legend**: ✅ Stable, 🟡 Beta, 📋 Planned, ❌ Not applicable
+
+---
+
+# Parser Guarantees
+
+The parser guarantees:
+
+- **Incremental parsing**: Chunks may arrive one byte at a time; the engine always produces correct partial state
+- **Deterministic behavior**: Identical input sequences always produce identical event sequences and output
+- **Provider independence**: Core engine never depends on any provider format; all formats are adapters
+- **Stable event ordering**: Events are emitted in a predictable, documented order
+- **Recoverable malformed streams**: Partial JSON, truncated chunks, and unexpected EOF are tolerated without data loss
+- **Non-blocking execution**: All operations are synchronous; no microtasks, promises, or I/O
+- **Streaming compatibility**: Works in Node.js, Bun, Deno, Browsers, and Cloudflare Workers
+- **No hidden state mutations**: Buffer and state are exposed via snapshot() for inspection
+
+---
+
 # Performance Rules
 
 Always measure.
@@ -459,6 +657,19 @@ Priority:
 - normalization
 
 Malformed streams are first-class test cases.
+
+---
+
+# Quality Gates
+
+Every Pull Request should:
+
+- include tests
+- include benchmarks if performance-sensitive
+- avoid breaking public APIs
+- avoid provider-specific logic in the core
+- document behavioral changes
+- preserve deterministic parsing
 
 ---
 
@@ -513,55 +724,20 @@ Avoid:
 
 ---
 
-# Performance Budget
+# Future Extensions
 
-Every implementation must respect these constraints:
+The engine is intentionally designed to parse more than Tool Calls.
 
-- **No regex in hot paths**: Tokenizer and state machine must use character-level operations
-- **O(n) complexity**: Processing time must scale linearly with input size
-- **Deterministic**: Same input always produces same output, same events, same order
-- **Maximum allocations per chunk**: Reuse buffers whenever possible; avoid per-character allocation
-- **Zero-copy preferred**: Reference input data instead of copying when safe
-- **Streaming only**: The engine must never require the complete input to begin processing
-- **No recursive parsing**: Use iterative state machines, not recursive descent
+Potential future modules include:
 
-Performance regressions should fail CI. Every optimization must be benchmarked.
+- **Structured Outputs** — JSON Schema responses
+- **MCP messages** — Model Context Protocol parsing
+- **Agent protocol messages** — Inter-agent communication
+- **Reasoning traces** — Chain-of-thought event streams
+- **Function result parsing** — Tool execution outputs
+- **Event streams** — Generic streaming event processing
 
----
-
-# Compatibility Matrix
-
-Every PR that adds or modifies a provider must update this table.
-
-| Provider | Status | Streaming | Non-Streaming | Auto-Detect |
-|----------|--------|-----------|---------------|-------------|
-| OpenAI | ✅ Stable | ✅ | ✅ | ✅ |
-| Anthropic | ✅ Stable | ✅ | ❌ | ✅ |
-| Gemini | ✅ Stable | ❌ | ✅ | ✅ |
-| DeepSeek | ✅ Stable | ✅ | ✅ | ✅ |
-| Qwen | ✅ Stable | ✅ | ✅ | ✅ |
-| XML | ✅ Stable | ✅ | ✅ | ✅ |
-| Markdown | 🟡 Beta | ✅ | ✅ | ✅ |
-| Mistral | 📋 Planned | | | |
-| xAI | 📋 Planned | | | |
-| OpenAI Compatible | 📋 Planned | | | |
-
-**Legend**: ✅ Stable, 🟡 Beta, 📋 Planned, ❌ Not applicable
-
----
-
-# Parser Guarantees
-
-The parser guarantees:
-
-- **Incremental parsing**: Chunks may arrive one byte at a time; the engine always produces correct partial state
-- **Deterministic behavior**: Identical input sequences always produce identical event sequences and output
-- **Provider independence**: Core engine never depends on any provider format; all formats are adapters
-- **Stable event ordering**: Events are emitted in a predictable, documented order
-- **Recoverable malformed streams**: Partial JSON, truncated chunks, and unexpected EOF are tolerated without data loss
-- **Non-blocking execution**: All operations are synchronous; no microtasks, promises, or I/O
-- **Streaming compatibility**: Works in Node.js, Bun, Deno, Browsers, and Cloudflare Workers
-- **No hidden state mutations**: Buffer and state are exposed via snapshot() for inspection
+These should be implemented as additional adapters or normalizers without modifying the core parser.
 
 ---
 
