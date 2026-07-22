@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'adapters/index': 'src/adapters/index.ts',
+    ai: 'src/ai.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

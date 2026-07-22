@@ -460,6 +460,7 @@ export class JsonRepairer {
 		repaired = JsonRepairer.fixSingleQuotes(repaired)
 		repaired = JsonRepairer.fixTrailingDecimal(repaired)
 		repaired = JsonRepairer.fixIncompleteBeforeBrace(repaired)
+		repaired = JsonRepairer.fixLiteralNewlines(repaired)
 
 		if (changes.length === 0 && repaired === input) return null
 		return {
@@ -515,6 +516,36 @@ export class JsonRepairer {
 
 	private static fixIncompleteBeforeBrace(s: string): string {
 		return s.replace(/,\s*([}\]])/g, "$1")
+	}
+
+	private static fixLiteralNewlines(s: string): string {
+		let inStr = false
+		let escaped = false
+		let result = ""
+		for (let i = 0; i < s.length; i++) {
+			const c = s[i]
+			if (escaped) {
+				escaped = false
+				result += c
+				continue
+			}
+			if (c === "\\") {
+				escaped = true
+				result += c
+				continue
+			}
+			if (c === '"') {
+				inStr = !inStr
+				result += c
+				continue
+			}
+			if (inStr && (c === "\n" || c === "\r")) {
+				result += c === "\n" ? "\\n" : "\\r"
+				continue
+			}
+			result += c
+		}
+		return result
 	}
 
 	private static computeMissingClosings(s: string): string {

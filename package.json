@@ -40,12 +40,28 @@
       "types": "./dist/internal/*.d.ts",
       "import": "./dist/internal/*.mjs",
       "require": "./dist/internal/*.cjs"
+    },
+    "./ai": {
+      "types": "./dist/ai.d.ts",
+      "import": "./dist/ai.mjs",
+      "require": "./dist/ai.cjs"
     }
+  },
+  "ai": {
+    "name": "ToolStream",
+    "description": "Incremental streaming parser for LLM tool calls — framework-agnostic, event-driven, multi-provider",
+    "entryPoint": "ToolStream",
+    "importPath": "@pedrofariasx/toolstream",
+    "quickStart": "import { ToolStream } from '@pedrofariasx/toolstream'; const parser = new ToolStream({ provider: 'openai' }); parser.on('tool-call:complete', (call) => {}); parser.push(chunk); parser.finalize();",
+    "manifest": "./ai/manifest.json",
+    "guide": "./ai/CLAUDE.md"
   },
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "ai",
+    "scripts"
   ],
   "sideEffects": false,
   "engines": {
@@ -58,11 +74,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "biome check src/",
-    "lint:fix": "biome check --apply src/",
+    "lint:fix": "biome check --write src/",
     "format": "biome format --write src/",
     "typecheck": "tsc --noEmit",
     "bench": "npx tsx benchmark/suite.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",

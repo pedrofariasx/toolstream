@@ -11,6 +11,7 @@ interface XmlToolState {
 	paramKey: string | undefined
 	paramValue: string
 	textBuffer: string
+	paramDepth: number
 }
 
 export class XmlAdapter extends BaseAdapter {
@@ -25,6 +26,7 @@ export class XmlAdapter extends BaseAdapter {
 		paramKey: undefined,
 		paramValue: "",
 		textBuffer: "",
+		paramDepth: 0,
 	}
 	private inToolCall: boolean = false
 	private inTag: boolean = false
@@ -43,6 +45,20 @@ export class XmlAdapter extends BaseAdapter {
 			const char = chunk[i]
 
 			if (char === "<" && !this.inTag) {
+				if (this.state.inParameters && this.state.currentTag) {
+					if (this.state.paramDepth === 0) {
+						const closeTag = `</${this.state.currentTag}>`
+						if (chunk.substring(i).startsWith(closeTag)) {
+							this.flushText()
+							this.inTag = true
+							this.tagName = ""
+							continue
+						}
+					}
+					this.state.paramDepth++
+					this.state.textBuffer += char
+					continue
+				}
 				this.flushText()
 				this.inTag = true
 				this.tagName = ""
@@ -65,6 +81,9 @@ export class XmlAdapter extends BaseAdapter {
 			}
 
 			if (this.inToolCall && !this.inTag) {
+				if (char === ">" && this.state.paramDepth > 0) {
+					this.state.paramDepth--
+				}
 				this.state.textBuffer += char
 			}
 		}
@@ -79,9 +98,46 @@ export class XmlAdapter extends BaseAdapter {
 		if (tag === "tool_name") {
 			this.state.name = text
 		} else if (this.state.inParameters && this.state.paramKey) {
-			this.state.arguments += `"${this.state.paramKey}": "${text.replace(/"/g, '\\"')}", `
+			this.state.arguments += `"${this.state.paramKey}": "${this.escapeJsonString(text)}", `
 			this.state.paramKey = undefined
 		}
+	}
+
+	private escapeJsonString(s: string): string {
+		let result = ""
+		for (let i = 0; i < s.length; i++) {
+			const c = s[i]
+			switch (c) {
+				case '"':
+					result += '\\"'
+					break
+				case "\\":
+					result += "\\\\"
+					break
+				case "\n":
+					result += "\\n"
+					break
+				case "\r":
+					result += "\\r"
+					break
+				case "\t":
+					result += "\\t"
+					break
+				case "\b":
+					result += "\\b"
+					break
+				case "\f":
+					result += "\\f"
+					break
+				default:
+					if (c < " ") {
+						result += `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`
+					} else {
+						result += c
+					}
+			}
+		}
+		return result
 	}
 
 	private handleTag(tag: string): NormalizedDelta[] | null {
@@ -110,6 +166,7 @@ export class XmlAdapter extends BaseAdapter {
 					paramKey: undefined,
 					paramValue: "",
 					textBuffer: "",
+					paramDepth: 0,
 				}
 				return results.length > 0 ? results : null
 			}
@@ -170,6 +227,7 @@ export class XmlAdapter extends BaseAdapter {
 			paramKey: undefined,
 			paramValue: "",
 			textBuffer: "",
+			paramDepth: 0,
 		}
 		this.inToolCall = false
 		this.inTag = false

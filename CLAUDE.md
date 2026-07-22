@@ -1,5 +1,21 @@
 # ToolStream — Streaming Parsing Engine
 
+## AI Integration (for consuming projects)
+
+When a user installs `@pedrofariasx/toolstream` via npm, the postinstall script automatically:
+1. Creates AI context files in `node_modules/@pedrofariasx/toolstream/.ai-context/integration.md`
+2. Generates a guide at `.claude/sources/toolstream.md` in the consuming project
+3. Ships `ai/manifest.json` with structured API metadata for AI tool discovery
+
+**To install & integrate with an AI assistant:**
+```bash
+npm install @pedrofariasx/toolstream
+```
+
+The AI will then use the metadata in `ai/manifest.json` and `ai/CLAUDE.md` to generate the correct import/usage code automatically. See `src/ai.ts` for the programmatic API manifest.
+
+---
+
 ## Project Vision
 
 ToolStream is a **provider-agnostic streaming parsing engine for incremental Tool Call processing**, compatible with OpenAI, Anthropic, Gemini, DeepSeek, Qwen, XML, Markdown and any text-based protocol.

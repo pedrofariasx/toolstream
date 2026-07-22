@@ -10,6 +10,8 @@ export {
 	XmlAdapter,
 } from "./adapters/index.js"
 export { adapterRegistry } from "./adapters/registry.js"
+export type { AIEventInfo, AIManifestEntry, AIProviderInfo } from "./ai.js"
+export { ai, getAIManifest, getIntegrationGuide } from "./ai.js"
 export { ConfidenceScorer } from "./confidence.js"
 export { ToolStreamEmitter } from "./event-emitter.js"
 export { JsonRepairer, JsonStreamParser } from "./json-stream.js"

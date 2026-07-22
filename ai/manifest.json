@@ -1,0 +1,284 @@
+{
+  "$schema": "https://raw.githubusercontent.com/pedrofariasx/toolstream/main/ai/schema.json",
+  "name": "@pedrofariasx/toolstream",
+  "version": "0.1.0",
+  "description": "Incremental streaming parser for LLM tool calls — framework-agnostic, event-driven, multi-provider",
+  "language": "typescript",
+  "runtime": ["node >=18", "bun", "deno", "browser", "cloudflare-workers"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "exports": ["ToolStream", "ToolStreamEmitter", "ToolCallStateMachine", "Tokenizer", "JsonStreamParser", "JsonRepairer", "Normalizer", "RecoveryEngine", "ConfidenceScorer", "adapterRegistry", "TokenType", "StateMachineState", "ToolStreamError", "ParseError", "RecoveryError"]
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.mjs",
+      "require": "./dist/adapters/index.cjs",
+      "exports": ["AnthropicAdapter", "BaseAdapter", "DeepSeekAdapter", "FunctionTagAdapter", "GeminiAdapter", "MarkdownAdapter", "OpenAIAdapter", "QwenAdapter", "XmlAdapter", "adapterRegistry"]
+    },
+    "./ai": {
+      "types": "./dist/ai.d.ts",
+      "import": "./dist/ai.mjs",
+      "require": "./dist/ai.cjs",
+      "exports": ["getAIManifest", "getIntegrationGuide"]
+    }
+  },
+  "mainClass": {
+    "name": "ToolStream",
+    "importPath": "@pedrofariasx/toolstream",
+    "description": "Main streaming parser class. Extends ToolStreamEmitter for event-driven parsing.",
+    "constructor": {
+      "params": [
+        {
+          "name": "options",
+          "type": "ToolStreamOptions",
+          "optional": true,
+          "default": "{}"
+        }
+      ]
+    },
+    "methods": [
+      {
+        "name": "push",
+        "signature": "push(chunk: string): this",
+        "description": "Feed a chunk of text into the parser. Returns this for chaining."
+      },
+      {
+        "name": "finalize",
+        "signature": "finalize(): CompletedToolCall[]",
+        "description": "Signal end of stream, complete all pending calls, drain events."
+      },
+      {
+        "name": "on",
+        "signature": "on<E extends EventKind>(event: E, listener: ToolStreamListener<E>): this",
+        "description": "Register an event listener. Inherited from ToolStreamEmitter."
+      },
+      {
+        "name": "getPendingCalls",
+        "signature": "getPendingCalls(): PendingToolCall[]",
+        "description": "Get all currently pending (incomplete) tool calls."
+      },
+      {
+        "name": "getCompletedCalls",
+        "signature": "getCompletedCalls(): CompletedToolCall[]",
+        "description": "Get all completed tool calls."
+      },
+      {
+        "name": "getNormalizedCalls",
+        "signature": "getNormalizedCalls(): NormalizedToolCall[]",
+        "description": "Get all normalized tool calls."
+      },
+      {
+        "name": "snapshot",
+        "signature": "snapshot(): ToolStreamSnapshot",
+        "description": "Get a snapshot of the current parser state."
+      },
+      {
+        "name": "reset",
+        "signature": "reset(): void",
+        "description": "Reset the parser to its initial state."
+      },
+      {
+        "name": "setProvider",
+        "signature": "setProvider(provider: ProviderName): void",
+        "description": "Set the active provider adapter."
+      },
+      {
+        "name": "setCustomAdapter",
+        "signature": "setCustomAdapter(adapter: ProviderAdapter): void",
+        "description": "Register and activate a custom provider adapter."
+      },
+      {
+        "name": "getProvider",
+        "signature": "getProvider(): ProviderName | null",
+        "description": "Get the currently detected/set provider name."
+      }
+    ]
+  },
+  "options": {
+    "ToolStreamOptions": {
+      "properties": [
+        {
+          "name": "autoDetectProvider",
+          "type": "boolean",
+          "default": "true",
+          "description": "Automatically detect the provider format from chunks"
+        },
+        {
+          "name": "provider",
+          "type": "ProviderName",
+          "default": "'openai'",
+          "description": "Explicit provider name (used when autoDetectProvider is false)"
+        },
+        {
+          "name": "customAdapter",
+          "type": "ProviderAdapter",
+          "description": "Custom adapter for non-standard formats"
+        },
+        {
+          "name": "earlyExecutionThreshold",
+          "type": "number",
+          "default": "0.85",
+          "description": "Confidence threshold for early execution events (0.0 to 1.0)"
+        },
+        {
+          "name": "maxBufferSize",
+          "type": "number",
+          "default": "1048576",
+          "description": "Maximum internal buffer size in bytes"
+        },
+        {
+          "name": "environment",
+          "type": "ToolStreamEnvironment",
+          "default": "'node'",
+          "description": "Runtime environment hint"
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "name": "text",
+      "signature": "(text: string) => void",
+      "description": "Emitted for plain text chunks (non-tool-call content)"
+    },
+    {
+      "name": "token",
+      "signature": "(type: string, value: string) => void",
+      "description": "Emitted for each token during tokenization"
+    },
+    {
+      "name": "toolDetected",
+      "signature": "(call: PendingToolCall) => void",
+      "description": "A new tool call has been detected in the stream"
+    },
+    {
+      "name": "toolStarted",
+      "signature": "(id: string, name: string, index: number) => void",
+      "description": "A tool call has started (name identified)"
+    },
+    {
+      "name": "toolUpdated",
+      "signature": "(call: PendingToolCall) => void",
+      "description": "A pending tool call has been updated with new data"
+    },
+    {
+      "name": "argumentsUpdated",
+      "signature": "(delta: string, partial: Record<string, unknown>, index: number) => void",
+      "description": "Arguments delta received and partial object parsed"
+    },
+    {
+      "name": "jsonUpdated",
+      "signature": "(parsed: Record<string, unknown>, index: number) => void",
+      "description": "JSON arguments have been partially parsed"
+    },
+    {
+      "name": "repair",
+      "signature": "(original: string, repaired: string, index: number | undefined) => void",
+      "description": "JSON repair was performed on malformed arguments"
+    },
+    {
+      "name": "normalized",
+      "signature": "(call: NormalizedToolCall) => void",
+      "description": "A tool call has been normalized to the standard format"
+    },
+    {
+      "name": "toolCompleted",
+      "signature": "(call: CompletedToolCall) => void",
+      "description": "A tool call has been fully parsed and completed"
+    },
+    {
+      "name": "error",
+      "signature": "(error: ToolStreamError) => void",
+      "description": "An error occurred during parsing"
+    },
+    {
+      "name": "stateChanged",
+      "signature": "(state: string) => void",
+      "description": "Parser state has changed"
+    },
+    {
+      "name": "snapshot",
+      "signature": "(snapshot: ToolStreamSnapshot) => void",
+      "description": "A snapshot event was emitted"
+    },
+    {
+      "name": "drain",
+      "signature": "() => void",
+      "description": "All events have been drained after finalize"
+    }
+  ],
+  "providers": [
+    {
+      "name": "openai",
+      "class": "OpenAIAdapter",
+      "description": "OpenAI streaming tool calls (SSE delta format)",
+      "streaming": true,
+      "autoDetect": true
+    },
+    {
+      "name": "anthropic",
+      "class": "AnthropicAdapter",
+      "description": "Anthropic Claude streaming (content_block_start/delta/stop)",
+      "streaming": true,
+      "autoDetect": true
+    },
+    {
+      "name": "gemini",
+      "class": "GeminiAdapter",
+      "description": "Google Gemini functionCall parts",
+      "streaming": false,
+      "autoDetect": true
+    },
+    {
+      "name": "deepseek",
+      "class": "DeepSeekAdapter",
+      "description": "DeepSeek OpenAI-compatible streaming",
+      "streaming": true,
+      "autoDetect": true
+    },
+    {
+      "name": "qwen",
+      "class": "QwenAdapter",
+      "description": "Qwen OpenAI-compatible streaming",
+      "streaming": true,
+      "autoDetect": true
+    },
+    {
+      "name": "xml",
+      "class": "XmlAdapter",
+      "description": "XML tool_call blocks",
+      "streaming": true,
+      "autoDetect": true
+    },
+    {
+      "name": "markdown",
+      "class": "MarkdownAdapter",
+      "description": "Markdown fenced code blocks with tool definitions",
+      "streaming": true,
+      "autoDetect": true,
+      "status": "beta"
+    }
+  ],
+  "types": {
+    "ProviderName": "openai | anthropic | gemini | deepseek | qwen | xml | markdown | custom",
+    "ToolStreamEnvironment": "node | bun | deno | browser | cloudflare-workers",
+    "StateMachineState": "Idle | Text | PossibleTool | ToolName | Arguments | Json | Escape | Completed | Error",
+    "TokenType": "OBJECT_START | OBJECT_END | ARRAY_START | ARRAY_END | STRING | NUMBER | TRUE | FALSE | NULL | COLON | COMMA | IDENTIFIER | TAG_OPEN | TAG_CLOSE | TAG_SELF_CLOSE | TAG_NAME | TEXT | EOF | INVALID"
+  },
+  "quickStart": {
+    "install": "npm install @pedrofariasx/toolstream",
+    "basic": "import { ToolStream } from '@pedrofariasx/toolstream';\n\nconst parser = new ToolStream({ provider: 'openai' });\n\nparser.on('tool-call:complete', (toolCall) => {\n  console.log('Tool:', toolCall.name, toolCall.arguments);\n});\n\nfor await (const chunk of stream) {\n  parser.push(chunk);\n}\n\nparser.finalize();",
+    "eventDriven": "import { ToolStream } from '@pedrofariasx/toolstream';\n\nconst parser = new ToolStream({ autoDetectProvider: true });\n\nparser.on('tool-call:start', (call) => console.log('Detected:', call));\nparser.on('tool-call:arguments:delta', (delta, partial, index) => {\n  console.log('Arguments delta:', delta);\n  console.log('Partial object:', partial);\n});\nparser.on('tool-call:complete', (call) => {\n  console.log('Complete tool call:', call);\n});\n\nparser.push(chunk);\nparser.finalize();",
+    "earlyExecution": "import { ToolStream } from '@pedrofariasx/toolstream';\n\nconst parser = new ToolStream({\n  provider: 'openai',\n  earlyExecutionThreshold: 0.85,\n});\n\nparser.on('tool-call:early-execute', (toolCall) => {\n  // Execute tool with partial arguments before stream ends\n  executeTool(toolCall.name, toolCall.partialArguments);\n});",
+    "customAdapter": "import { ToolStream, BaseAdapter } from '@pedrofariasx/toolstream';\nimport type { NormalizedDelta, ProviderName } from '@pedrofariasx/toolstream';\n\nclass MyAdapter extends BaseAdapter {\n  readonly name: ProviderName = 'custom';\n\n  *processChunk(chunk: string): Generator<NormalizedDelta> {\n    // Convert custom format to NormalizedDelta events\n  }\n\n  detect(chunk: string): boolean {\n    return chunk.includes('my-format');\n  }\n}\n\nconst parser = new ToolStream({ customAdapter: new MyAdapter() });",
+    "adapterUsage": "import { ToolStream } from '@pedrofariasx/toolstream';\nimport { AnthropicAdapter } from '@pedrofariasx/toolstream/adapters';\n\n// Use a specific adapter directly\nconst parser = new ToolStream({ provider: 'anthropic' });\n\n// Or access the registry\nimport { adapterRegistry } from '@pedrofariasx/toolstream';\nconst adapter = adapterRegistry.get('gemini');\nparser.setCustomAdapter(adapter);"
+  },
+  "dependencies": {
+    "production": [],
+    "peer": []
+  },
+  "keywords": ["llm", "tool-calls", "function-calling", "streaming", "parser", "openai", "anthropic", "gemini", "deepseek", "incremental", "json-stream", "partial-json"]
+}
