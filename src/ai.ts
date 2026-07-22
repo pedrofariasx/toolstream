@@ -23,7 +23,7 @@ export interface AIEventInfo {
 export function getAIManifest() {
 	return {
 		name: "@pedrofariasx/toolstream",
-		version: "0.1.0",
+		version: "0.2.0",
 		description: "Incremental streaming parser for LLM tool calls",
 		mainClass: {
 			name: "ToolStream",

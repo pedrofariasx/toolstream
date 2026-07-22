@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/pedrofariasx/toolstream/main/ai/schema.json",
   "name": "@pedrofariasx/toolstream",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Incremental streaming parser for LLM tool calls — framework-agnostic, event-driven, multi-provider",
   "language": "typescript",
   "runtime": ["node >=18", "bun", "deno", "browser", "cloudflare-workers"],
