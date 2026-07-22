@@ -79,7 +79,6 @@ export class ToolCallStateMachine {
   }
 
   private processPossibleTool(char: string): void {
-    this.buffer += char
     const ctx = this.buffer
     if (ctx.includes('tool_calls') || ctx.includes('function') ||
         ctx.includes('tool_use') || ctx.includes('functionCall') ||
@@ -96,6 +95,7 @@ export class ToolCallStateMachine {
         repaired: false,
       }
       this.context.toolCalls.set(0, this.context.currentToolCall)
+      this.reprocessChar(char)
     } else if (char === '}') {
       this.state = StateMachineState.Text
     }
@@ -111,13 +111,17 @@ export class ToolCallStateMachine {
   }
 
   private processArguments(char: string): void {
-    this.context.jsonParser.feed(char)
     this.state = StateMachineState.Json
-    this.processJson(char)
+    this.context.jsonParser.feed(char)
+    this.processJsonDepth(char)
   }
 
   private processJson(char: string): void {
     this.context.jsonParser.feed(char)
+    this.processJsonDepth(char)
+  }
+
+  private processJsonDepth(char: string): void {
     if (char === '\\' && !this.escapeNext) {
       this.escapeNext = true
       return
@@ -126,7 +130,6 @@ export class ToolCallStateMachine {
       this.escapeNext = false
       return
     }
-
     if (char === '{') this.context.argumentsDepth++
     if (char === '}') {
       this.context.argumentsDepth--
@@ -138,12 +141,8 @@ export class ToolCallStateMachine {
     if (char === ']') this.context.argumentsDepth--
   }
 
-  private processEscape(char: string): void {
-    if (char === '"' || char === '\\') {
-      this.state = StateMachineState.Json
-    } else {
-      this.state = StateMachineState.Json
-    }
+  private processEscape(_char: string): void {
+    this.state = StateMachineState.Json
   }
 
   private processCompleted(_char: string): void {
@@ -151,6 +150,15 @@ export class ToolCallStateMachine {
     this.state = StateMachineState.Idle
     this.buffer = ''
     this.context.providerDetected = false
+  }
+
+  private reprocessChar(char: string): void {
+    if (char === '{' || char === '<') {
+      this.state = StateMachineState.Arguments
+      this.context.argumentsDepth = 1
+      this.context.jsonParser.reset()
+      this.context.jsonParser.feed(char)
+    }
   }
 
   reset(): void {

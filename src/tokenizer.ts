@@ -79,8 +79,13 @@ export class Tokenizer {
       if (c === '\\') {
         this.position++
         if (this.position < this.input.length) {
-          value += this.input[this.position]
-          this.position++
+          const next = this.input[this.position]
+          if (next === 'u') {
+            value += this.readUnicodeEscape()
+          } else {
+            value += next
+            this.position++
+          }
         }
         continue
       }
@@ -92,6 +97,19 @@ export class Tokenizer {
       this.position++
     }
     return this.makeToken(TokenType.STRING, value)
+  }
+
+  private readUnicodeEscape(): string {
+    this.position++ // skip u
+    if (this.position + 4 > this.input.length) {
+      return '\\u'
+    }
+    const hex = this.input.slice(this.position, this.position + 4)
+    this.position += 4
+    if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+      return String.fromCharCode(parseInt(hex, 16))
+    }
+    return `\\u${hex}`
   }
 
   private readNumber(): Token {

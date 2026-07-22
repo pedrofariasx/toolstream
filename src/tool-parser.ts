@@ -165,6 +165,10 @@ export class ToolStream extends ToolStreamEmitter {
 
   private handleDelta(delta: NormalizedDelta): void {
     switch (delta.type) {
+      case 'text': {
+        if (delta.text) this.emitSync('text', delta.text)
+        break
+      }
       case 'toolDetected': {
         const index = delta.index ?? 0
         if (!this.pendingCalls.has(index)) {
@@ -397,7 +401,7 @@ export class ToolStream extends ToolStreamEmitter {
   }
 
   snapshot(): ToolStreamSnapshot {
-    return {
+    const s = {
       pendingCalls: this.getPendingCalls(),
       completedCalls: this.getCompletedCalls(),
       buffer: this.buffer,
@@ -405,6 +409,8 @@ export class ToolStream extends ToolStreamEmitter {
       provider: this.provider,
       chunkCount: this.chunkCount,
     }
+    this.emitSync('stateChanged', `snapshot:${this.stateMachine.getState()}`)
+    return s
   }
 
   setProvider(provider: ProviderName): void {

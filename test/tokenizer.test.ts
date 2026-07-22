@@ -112,4 +112,20 @@ describe('Tokenizer', () => {
     const token = tokenizer.next()
     expect(token.type).toBe(TokenType.OBJECT_START)
   })
+
+  it('should handle unicode escape sequences in strings', () => {
+    const tokenizer = new Tokenizer()
+    tokenizer.feed('{"emoji": "\\uD83D\\uDE00"}')
+    const tokens = tokenizer.allTokens()
+    const stringToken = tokens.find(t => t.type === TokenType.STRING && t.value.length > 0 && t !== tokens[1])
+    expect(stringToken).toBeDefined()
+  })
+
+  it('should handle unicode escape for accented characters', () => {
+    const tokenizer = new Tokenizer()
+    tokenizer.feed('{"accent": "\\u00E1"}')
+    const tokens = tokenizer.allTokens()
+    const stringToken = tokens.find(t => t.type === TokenType.STRING && t.value !== 'accent')
+    expect(stringToken).toBeDefined()
+  })
 })
