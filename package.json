@@ -10,7 +10,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/toolstream/toolstream"
+    "url": "https://github.com/pedrofariasx/toolstream"
   },
   "type": "module",
   "main": "./dist/index.cjs",
