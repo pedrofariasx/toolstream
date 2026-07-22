@@ -356,6 +356,16 @@ describe('ToolStream', () => {
     expect(normalized[0].provider).toBe('openai')
   })
 
+  it('should emit snapshot event on snapshot()', () => {
+    const parser = new ToolStream({ provider: 'openai', autoDetectProvider: false })
+    let emitted = false
+
+    parser.on('snapshot', () => { emitted = true })
+    parser.snapshot()
+
+    expect(emitted).toBe(true)
+  })
+
   it('should normalize via pipeline automatically', () => {
     const parser = new ToolStream({ provider: 'openai', autoDetectProvider: false })
 

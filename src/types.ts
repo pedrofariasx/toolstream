@@ -104,6 +104,7 @@ export type EventKind =
   | 'toolCompleted'
   | 'error'
   | 'stateChanged'
+  | 'snapshot'
   | 'drain'
 
 export interface ToolStreamEventMap {
@@ -119,6 +120,7 @@ export interface ToolStreamEventMap {
   'toolCompleted': [toolCall: CompletedToolCall]
   'error': [error: ToolStreamError]
   'stateChanged': [state: string]
+  'snapshot': [snapshot: ToolStreamSnapshot]
   'drain': []
 }
 

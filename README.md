@@ -104,10 +104,20 @@ parser.on('tool-call:early-execute', (toolCall) => {
 })
 ```
 
+## Documentação
+
+A documentação completa da API está em [`docs/api.md`](docs/api.md).
+
+## Benchmarks
+
+```bash
+npm run bench     # Executa suite de benchmarks
+```
+
 ## Testes
 
 ```bash
-npm test          # Executa testes
+npm test          # Executa testes (vitest)
 npm run test:watch  # Modo watch
 npm run test:coverage # Cobertura
 ```
@@ -117,6 +127,15 @@ npm run test:coverage # Cobertura
 ```bash
 npm run build     # Gera dist/ com ESM, CJS e DTS
 ```
+
+## CI
+
+O projeto usa GitHub Actions para:
+
+- Type checking (`tsc --noEmit`)
+- Testes unitários (Node 18, 20, 22)
+- Build (ESM + CJS + DTS)
+- Benchmarks automáticos no `main`
 
 ## Licença
 

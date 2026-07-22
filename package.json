@@ -45,6 +45,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
+    "bench": "npx tsx benchmark/suite.ts",
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {

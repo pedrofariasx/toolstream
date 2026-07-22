@@ -409,7 +409,7 @@ export class ToolStream extends ToolStreamEmitter {
       provider: this.provider,
       chunkCount: this.chunkCount,
     }
-    this.emitSync('stateChanged', `snapshot:${this.stateMachine.getState()}`)
+    this.emitSync('snapshot', s)
     return s
   }
 
